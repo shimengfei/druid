@@ -1606,6 +1606,11 @@ public class MySqlExprParser extends SQLExprParser {
         SQLSubPartition subPartition = new SQLSubPartition();
         subPartition.setName(this.name());
 
+        SQLPartitionValue values = this.parsePartitionValues();
+        if (values != null) {
+            subPartition.setValues(values);
+        }
+
         for (; ; ) {
             boolean storage = false;
             if (lexer.identifierEquals(FnvHash.Constants.DATA)) {

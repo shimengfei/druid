@@ -124,7 +124,7 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
                         final Lexer.SavePoint mark = lexer.mark();
                         lexer.nextToken();
                         if (lexer.token() == Token.INDEX || lexer.token() == Token.KEY
-                            || lexer.token() == Token.UNIQUE) {
+                                || lexer.token() == Token.UNIQUE) {
                             local = true;
                         } else if (lexer.token() == Token.FULLTEXT) {
                             lexer.nextToken();
@@ -160,7 +160,7 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
                                     continue;
                                 }
                             } else if (lexer.token() == Token.IDENTIFIER && MySqlUtils.isBuiltinDataType(
-                                lexer.stringVal())) {
+                                    lexer.stringVal())) {
                                 lexer.reset(mark);
                             } else {
                                 MySqlTableIndex idx = new MySqlTableIndex();
@@ -180,7 +180,7 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
                         } else if (lexer.identifierEquals(FnvHash.Constants.SPATIAL)) {
                             lexer.nextToken();
                             if (lexer.token() == Token.INDEX || lexer.token() == Token.KEY ||
-                                lexer.token() != Token.IDENTIFIER || !MySqlUtils.isBuiltinDataType(lexer.stringVal())) {
+                                    lexer.token() != Token.IDENTIFIER || !MySqlUtils.isBuiltinDataType(lexer.stringVal())) {
                                 MySqlTableIndex idx = new MySqlTableIndex();
                                 this.exprParser.parseIndex(idx.getIndexDefinition());
                                 idx.setIndexType("SPATIAL");
@@ -1363,6 +1363,67 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
         return clause;
     }
 
+    protected SQLSubPartition parseSubPartition() {
+        acceptIdentifier("SUBPARTITION");
+
+        SQLSubPartition subPartition = new SQLSubPartition();
+        SQLName name = this.exprParser.name();
+        subPartition.setName(name);
+
+        SQLPartitionValue values = this.parsePartitionValues();
+        if (values != null) {
+            subPartition.setValues(values);
+        }
+
+        if (lexer.token() == Token.TABLESPACE) {
+            lexer.nextToken();
+            subPartition.setTableSpace(this.exprParser.name());
+        }
+
+        return subPartition;
+    }
+
+    public SQLPartitionValue parsePartitionValues() {
+        if (lexer.token() != Token.VALUES) {
+            return null;
+        }
+        lexer.nextToken();
+
+        SQLPartitionValue values = null;
+
+        if (lexer.token() == Token.IN) {
+            lexer.nextToken();
+            values = new SQLPartitionValue(SQLPartitionValue.Operator.In);
+
+            accept(Token.LPAREN);
+            this.exprParser.exprList(values.getItems(), values);
+            accept(Token.RPAREN);
+        } else if (lexer.identifierEquals(FnvHash.Constants.LESS)) {
+            lexer.nextToken();
+            acceptIdentifier("THAN");
+
+            values = new SQLPartitionValue(SQLPartitionValue.Operator.LessThan);
+
+            if (lexer.identifierEquals(FnvHash.Constants.MAXVALUE)) {
+                SQLIdentifierExpr maxValue = new SQLIdentifierExpr(lexer.stringVal());
+                lexer.nextToken();
+                maxValue.setParent(values);
+                values.addItem(maxValue);
+            } else {
+                accept(Token.LPAREN);
+                this.exprParser.exprList(values.getItems(), values);
+                accept(Token.RPAREN);
+            }
+        } else if (lexer.token() == Token.LPAREN) {
+            values = new SQLPartitionValue(SQLPartitionValue.Operator.List);
+            lexer.nextToken();
+            this.exprParser.exprList(values.getItems(), values);
+            accept(Token.RPAREN);
+        }
+
+        return values;
+    }
+
     protected SQLPartitionByValue partitionByValue() {
         SQLPartitionByValue clause = new SQLPartitionByValue();
         if (lexer.identifierEquals(FnvHash.Constants.VALUE)) {
@@ -1577,14 +1638,7 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
                 } else {
                     acceptIdentifier("COLUMNS");
                     accept(Token.LPAREN);
-                    for (; ; ) {
-                        subPartitionList.addColumn(this.exprParser.parseColumn());
-                        if (lexer.token() == Token.COMMA) {
-                            lexer.nextToken();
-                            continue;
-                        }
-                        break;
-                    }
+                    this.exprParser.exprList(subPartitionList.getKeys(), subPartitionList);
                     accept(Token.RPAREN);
                 }
                 subPartitionByClause = subPartitionList;
@@ -1592,7 +1646,12 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
                 lexer.nextToken();
                 SQLSubPartitionByRange range = new SQLSubPartitionByRange();
 
-                accept(Token.LPAREN);
+                if (lexer.token() == Token.LPAREN) {
+                    lexer.nextToken();
+                } else {
+                    acceptIdentifier("COLUMNS");
+                    accept(Token.LPAREN);
+                }
                 this.exprParser.exprList(range.getColumns(), range);
                 accept(Token.RPAREN);
                 subPartitionByClause = range;
@@ -1600,8 +1659,28 @@ public class MySqlCreateTableParser extends SQLCreateTableParser {
 
             if (lexer.identifierEquals(FnvHash.Constants.SUBPARTITION)) {
                 lexer.nextToken();
-                acceptIdentifier("OPTIONS");
-                this.exprParser.parseAssignItem(subPartitionByClause.getOptions(), subPartitionByClause);
+                if (identifierEquals("TEMPLATE")) {
+                    lexer.nextToken();
+                    accept(Token.LPAREN);
+
+                    for (; ; ) {
+                        SQLSubPartition subPartition = this.parseSubPartition();
+                        subPartition.setParent(subPartitionByClause);
+                        subPartitionByClause.getSubPartitionTemplate().add(subPartition);
+
+                        if (lexer.token() == Token.COMMA) {
+                            lexer.nextToken();
+                            continue;
+                        }
+                        break;
+                    }
+                    accept(Token.RPAREN);
+
+                } else {
+                    acceptIdentifier("OPTIONS");
+                    this.exprParser.parseAssignItem(subPartitionByClause.getOptions(), subPartitionByClause);
+                }
+
             }
 
             if (lexer.identifierEquals(FnvHash.Constants.SUBPARTITIONS)) {

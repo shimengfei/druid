@@ -5534,7 +5534,6 @@ public class SQLExprParser extends SQLParser {
                         indexDefinition.getOptions().setLock(lexer.stringVal());
                         lexer.nextToken();
                         break;
-
                     case IDENTIFIER:
                         if (lexer.identifierEquals(FnvHash.Constants.KEY_BLOCK_SIZE)
                                 || lexer.identifierEquals(FnvHash.Constants.BLOCK_SIZE)) {
@@ -5592,11 +5591,14 @@ public class SQLExprParser extends SQLParser {
                             //} else if (lexer.identifierEquals(FnvHash.Constants.GLOBAL)) {
                             //    lexer.nextToken();
                             //    indexDefinition.setGlobal(true);
+                        } else if (lexer.identifierEquals("CTXCAT")) {
+                            lexer.nextToken();
+                            SQLIndexDefinition indexDefinitionTemp = new SQLIndexDefinition();
+                            parseIndexRest(indexDefinitionTemp);
                         } else {
                             break _opts;
                         }
                         break;
-
                     default:
                         break _opts;
                 }
