@@ -123,7 +123,7 @@ public class SQLParserUtils {
                 return new PGSQLStatementParser(sql, features);
             case sqlserver:
             case jtds:
-                return new SQLServerStatementParser(sql);
+                return new SQLServerStatementParser(sql, features);
             case h2:
                 return new H2StatementParser(sql, features);
             case blink:
@@ -535,7 +535,7 @@ public class SQLParserUtils {
                 script = true;
             }
 
-            if (script || lexer.identifierEquals("pai") || lexer.identifierEquals("jar")) {
+            if (script || lexer.identifierEquals("pai") || lexer.identifierEquals("jar") || lexer.identifierEquals("copy")) {
                 return Collections.singletonList(sql);
             }
         }
